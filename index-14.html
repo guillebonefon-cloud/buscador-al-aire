@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buscador al aire</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#15171b">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#15171b;--panel:#1f2228;--line:#333843;--text:#eef0f3;--muted:#98a0ae;--air:#ff3b30}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.4 "Segoe UI",system-ui,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 18px 10px;border-bottom:1px solid var(--line)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+form{display:flex;gap:8px;flex:1;min-width:260px}
+input{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:12px 14px;font-size:18px;width:100%}
+:focus-visible{outline:2px solid var(--air);outline-offset:1px}
+button{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:12px 16px;font-size:16px;cursor:pointer}
+button.primary{background:var(--air);border-color:var(--air);font-weight:600}
+#air.on{border-color:var(--air);color:var(--air)}
+#hist{display:flex;gap:6px;overflow-x:auto;margin-top:10px}
+#hist button{padding:5px 11px;font-size:14px;white-space:nowrap;color:var(--muted)}
+main{padding:18px 18px 130px}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.th{position:relative;aspect-ratio:1;background:var(--panel);border:2px solid transparent;border-radius:8px;overflow:hidden;cursor:pointer}
+.th img{width:100%;height:100%;object-fit:cover;display:block}
+.th.sel{border-color:var(--air)}
+.th span{position:absolute;left:0;right:0;bottom:0;padding:18px 8px 6px;font-size:12px;background:linear-gradient(transparent,rgba(0,0,0,.85));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.n{position:absolute;left:6px;top:6px;min-width:24px;padding:1px 7px;border-radius:6px;background:rgba(0,0,0,.75);font:600 14px/1.5 inherit;font-style:normal;text-align:center}
+.st{position:absolute;right:6px;top:4px;font-size:24px;line-height:1;cursor:pointer;text-shadow:0 0 4px #000}
+.st.on{color:#ffc933}
+.used img{opacity:.45}
+.used::after{content:"salió";position:absolute;left:6px;bottom:30px;font-size:12px;background:rgba(0,0,0,.75);padding:1px 7px;border-radius:6px}
+#msg{color:var(--muted);padding:30px 0;text-align:center}
+#more{display:none;margin:18px auto 0}
+dialog{border:0;padding:0;background:#000;width:100vw;height:100vh;max-width:none;max-height:none}
+dialog img{width:100%;height:100%;object-fit:contain;display:block}
+dialog::backdrop{background:#000}
+#setup{display:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:18px}
+#setup label{display:block;margin:10px 0 4px;color:var(--muted);font-size:14px}
+#setup p{margin:0 0 6px;color:var(--muted);font-size:14px}
+#keys{margin-top:10px;color:var(--muted);font-size:13px;display:none}
+#tray{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--panel);border-top:2px solid var(--line);padding:8px 18px;display:flex;gap:8px;align-items:center;overflow-x:auto}
+#tray>em{color:var(--muted);font-size:14px;white-space:nowrap;font-style:normal}
+.tt{position:relative;flex:none;width:88px;height:70px;border:2px solid transparent;border-radius:6px;overflow:hidden;cursor:pointer}
+.tt img{width:100%;height:100%;object-fit:cover;display:block}
+.tt.sel{border-color:var(--air)}
+.tt .n{font-size:12px;top:2px;left:2px;min-width:20px;padding:0 5px}
+.tt .x{position:absolute;right:3px;top:0;font-size:18px;text-shadow:0 0 4px #000;font-style:normal}
+#now{display:flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.06em;color:var(--muted)}
+#now .box{width:96px;height:54px;background:#000;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+#now img{width:100%;height:100%;object-fit:contain;display:none}
+#now.img img{display:block}
+#now.img #nowlbl{color:var(--air);font-weight:700}
+#now.img .box{border-color:var(--air)}
+#newshow{margin-left:auto;flex:none;padding:8px 12px;font-size:14px}
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <form id="f"><input id="q" placeholder="Qué buscás: tapa de disco, nota, persona…" autocomplete="off" autofocus><button class="primary">Buscar</button></form>
+    <button id="air" type="button" title="Abre la ventana de aire en el monitor extendido">Pantalla de aire</button>
+    <button id="blkbtn" type="button" title="Pantalla negra (tecla B)">Negro (B)</button>
+    <div id="now" class="none" title="Lo que está al aire ahora"><div class="box"><img id="nowimg" alt=""></div><small id="nowlbl">SIN IMAGEN</small></div>
+    <button id="cfg" type="button">Claves</button>
+    <button id="kb" type="button">Atajos</button>
+  </div>
+  <div id="keys">
+    <b>/</b> buscar · <b>1–9</b> mandar al aire esa miniatura · <b>flechas</b> moverse + <b>Enter</b> al aire · <b>S</b> marcar ★ · <b>Shift+1–9</b> bandeja al aire · <b>B</b> pantalla negra (o botón Negro) · <b>Esc</b> salir del cuadro de búsqueda / cerrar imagen grande.
+    Los atajos funcionan desde cualquiera de las dos ventanas. En la ventana de aire: clic o <b>F</b> para pantalla completa.
+  </div>
+  <div id="hist"></div>
+</header>
+<main>
+  <section id="setup">
+    <p>Pegá una sola vez tu clave de Serper (serper.dev). Queda guardada en este navegador.</p>
+    <label for="key">Clave de API</label><input id="key">
+    <p style="margin-top:12px"><button id="save" type="button" class="primary">Guardar</button></p>
+  </section>
+  <div id="grid"></div>
+  <div id="msg">Escribí lo que necesitás y apretá Enter.</div>
+  <button id="more" type="button">Más resultados</button>
+</main>
+<div id="tray"></div>
+<dialog id="big"><img id="bigimg" alt=""></dialog>
+<script>
+const $=id=>document.getElementById(id);
+const ld=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}};
+const sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+let key="";try{key=localStorage.getItem("sk")||""}catch(e){}
+let cache=ld("cache",{}),hist=ld("hist",[]),tray=ld("tray",[]),used=ld("used",[]);
+let cur={q:"",page:1,items:[]},aire=null,black=false;
+$("key").value=key;
+if(!key){$("setup").style.display="block";$("msg").textContent="Primero cargá tu clave."}
+
+$("cfg").onclick=()=>{const s=$("setup");s.style.display=s.style.display==="block"?"none":"block"};
+$("kb").onclick=()=>{const s=$("keys");s.style.display=s.style.display==="block"?"none":"block"};
+$("save").onclick=()=>{key=$("key").value.trim();
+  try{localStorage.setItem("sk",key)}catch(e){}
+  $("setup").style.display="none";$("msg").textContent="Listo. Escribí lo que necesitás y apretá Enter."};
+
+/* ---------- búsqueda, historial y memoria ---------- */
+$("f").onsubmit=e=>{e.preventDefault();$("q").blur();go($("q").value)};
+function go(raw){
+  const q=raw.trim().toLowerCase();if(!q)return;
+  $("q").value=raw.trim();
+  if(cache[q]){
+    cur={q,page:cache[q].page,items:cache[q].items};
+    touch(q);render();
+    $("msg").textContent="Resultado guardado: no gastó créditos.";
+    $("more").style.display="block";$("q").blur();return}
+  if(!key){$("setup").style.display="block";return}
+  cur={q,page:1,items:[]};$("grid").innerHTML="";fetchPage(1)}
+$("more").onclick=()=>fetchPage(cur.page+1);
+async function fetchPage(pg){
+  $("msg").textContent="Buscando…";$("more").style.display="none";
+  try{
+    const r=await fetch("https://google.serper.dev/images",{method:"POST",
+      headers:{"X-API-KEY":key,"Content-Type":"application/json"},
+      body:JSON.stringify({q:cur.q,gl:"ar",hl:"es",num:20,page:pg})});
+    const d=await r.json();
+    if(!r.ok){$("msg").textContent="Error: "+(d.message||r.status);render();return}
+    const got=(d.images||[]).map(i=>({title:i.title||"",imageUrl:i.imageUrl,thumbnailUrl:i.thumbnailUrl}));
+    if(!got.length&&pg===1){$("msg").textContent="Sin resultados. Probá con otras palabras.";return}
+    cur.page=pg;cur.items.push(...got);
+    delete cache[cur.q];cache[cur.q]={page:cur.page,items:cur.items};
+    const ks=Object.keys(cache);while(ks.length>30)delete cache[ks.shift()];
+    sv("cache",cache);touch(cur.q);render();
+    $("msg").textContent="";
+    if(got.length>=10)$("more").style.display="block";
+    $("q").blur();
+  }catch(e){$("msg").textContent="No se pudo conectar. Revisá internet y la clave."}}
+function touch(q){hist=[q,...hist.filter(h=>h!==q)].slice(0,12);sv("hist",hist);renderHist()}
+function renderHist(){$("hist").innerHTML="";hist.forEach(h=>{const b=document.createElement("button");b.type="button";b.textContent=h;b.onclick=()=>go(h);$("hist").appendChild(b)})}
+
+/* ---------- grilla ---------- */
+const inTray=it=>tray.some(t=>t.imageUrl===it.imageUrl);
+function render(){$("grid").innerHTML="";cur.items.forEach((it,i)=>$("grid").appendChild(card(it,i)))}
+function card(it,i){
+  const d=document.createElement("div");
+  d.className="th"+(used.includes(it.imageUrl)?" used":"");d.tabIndex=0;d.dataset.k=it.imageUrl;
+  d.innerHTML='<img alt=""><span></span><i class="n"></i><b class="st"></b>';
+  d.querySelector("img").src=it.thumbnailUrl||it.imageUrl;
+  d.querySelector("span").textContent=it.title;
+  d.querySelector(".n").textContent=i<9?i+1:"";if(i>=9)d.querySelector(".n").remove();
+  const st=d.querySelector(".st");st.textContent=inTray(it)?"★":"☆";st.classList.toggle("on",inTray(it));
+  st.onclick=e=>{e.stopPropagation();toggleTray(it)};
+  d.onclick=()=>pick(it,d);
+  d.onkeydown=e=>{if(e.key==="Enter")pick(it,d)};
+  return d}
+function refreshStars(){document.querySelectorAll(".th").forEach(d=>{
+  const on=tray.some(t=>t.imageUrl===d.dataset.k),s=d.querySelector(".st");s.textContent=on?"★":"☆";s.classList.toggle("on",on)})}
+
+/* ---------- bandeja del programa ---------- */
+function toggleTray(it){
+  if(inTray(it))tray=tray.filter(t=>t.imageUrl!==it.imageUrl);else tray.push(it);
+  sv("tray",tray);renderTray();refreshStars()}
+function renderTray(){
+  const t=$("tray");t.innerHTML="";
+  if(!tray.length){t.innerHTML='<em>Bandeja vacía: marcá con ★ las imágenes que ya sabés que vas a usar.</em>'}
+  tray.forEach((it,i)=>{
+    const d=document.createElement("div");d.className="tt";d.dataset.k=it.imageUrl;d.title=it.title;
+    d.innerHTML='<img alt=""><i class="n"></i><i class="x">×</i>';
+    d.querySelector("img").src=it.thumbnailUrl||it.imageUrl;
+    d.querySelector(".n").textContent=i<9?i+1:"";if(i>=9)d.querySelector(".n").remove();
+    d.querySelector(".x").onclick=e=>{e.stopPropagation();toggleTray(it)};
+    d.onclick=()=>pick(it);t.appendChild(d)});
+  const b=document.createElement("button");b.id="newshow";b.type="button";b.textContent="Nuevo programa";
+  b.onclick=()=>{if(confirm("¿Vaciar la bandeja y las marcas de 'salió'?")){tray=[];used=[];sv("tray",tray);sv("used",used);renderTray();render()}};
+  t.appendChild(b)}
+
+/* ---------- al aire ---------- */
+let last=null,airScreen=null;
+function setImg(img,it){img.onerror=()=>{img.onerror=null;img.src=it.thumbnailUrl};img.src=it.imageUrl}
+const airOpen=()=>aire&&!aire.closed;
+function nowShow(it,st){
+  if(it)setImg($("nowimg"),it);
+  $("now").className=st;$("nowlbl").textContent=st==="img"?"AL AIRE":st==="black"?"NEGRO":"SIN IMAGEN"}
+function airShow(it){
+  const d=aire.document,front=d.querySelector("img.on"),back=[...d.images].find(i=>i!==front)||d.images[0];
+  const done=()=>{back.classList.add("on");if(front)front.classList.remove("on")};
+  back.onload=done;back.onerror=()=>{back.onerror=null;back.onload=done;back.src=it.thumbnailUrl};
+  back.src=it.imageUrl;d.body.style.opacity=1;d.getElementById("h").style.display="none"}
+function pick(it){
+  if(!used.includes(it.imageUrl)){used.push(it.imageUrl);sv("used",used)}
+  document.querySelectorAll(".sel").forEach(x=>x.classList.remove("sel"));
+  document.querySelectorAll(".th,.tt").forEach(x=>{if(x.dataset.k===it.imageUrl){x.classList.add("sel");if(x.classList.contains("th"))x.classList.add("used")}});
+  black=false;last=it;
+  if(airOpen()){airShow(it);nowShow(it,"img");return}
+  setImg($("bigimg"),it);if(!$("big").open)$("big").showModal()}
+function toggleBlack(){
+  if(airOpen()){black=!black;aire.document.body.style.opacity=black?0:1;
+    nowShow(null,black?"black":(last?"img":"none"))}
+  else if($("big").open)$("big").close()}
+$("big").onclick=()=>$("big").close();
+
+function buildAir(w){
+  const d=w.document;d.open();
+  d.write('<!doctype html><meta charset="utf-8"><meta name="color-scheme" content="dark"><title>Aire</title><style>'+
+    'html,body{margin:0;height:100%;background:#000;overflow:hidden}html.fs{cursor:none}body{transition:opacity .25s ease}'+
+    'img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .18s ease}'+
+    'img.on{opacity:1}.blk img{opacity:0!important}'+
+    '#h{position:absolute;left:0;right:0;bottom:20px;text-align:center;color:#555;font:14px system-ui,sans-serif}'+
+    '</style><body><img id="a" alt=""><img id="b" alt=""><div id="h">Clic o tecla F: pantalla completa</div>');
+  d.close();
+  const full=()=>{if(d.fullscreenElement)return;const el=d.documentElement;
+    const go=()=>el.requestFullscreen().catch(()=>{});
+    if(airScreen){el.requestFullscreen({screen:airScreen}).catch(go)}else go()};
+  d.addEventListener("click",full);
+  d.addEventListener("keydown",e=>{if(e.key==="f"||e.key==="F"){full();return}onKey(e)});
+  d.addEventListener("fullscreenchange",()=>{
+    d.documentElement.classList.toggle("fs",!!d.fullscreenElement);
+    if(d.fullscreenElement)d.getElementById("h").style.display="none"})}
+
+$("air").onclick=openAir;$("blkbtn").onclick=toggleBlack;
+async function openAir(){
+  if(airOpen()){aire.focus();return}
+  let s=null,tip="";
+  try{
+    if(window.getScreenDetails){
+      const det=await window.getScreenDetails();
+      s=det.screens.find(x=>!x.isPrimary)||null;
+      if(!s)tip="Solo detecto una pantalla: la ventana de aire se abre en esta."}
+    else tip="Este navegador no ubica la ventana solo. Usá Chrome o Edge."
+  }catch(e){tip="Sin permiso para ubicar pantallas: arrastrá la ventana de aire al monitor extendido."}
+  const f=s?"popup=yes,left="+s.left+",top="+s.top+",width="+s.width+",height="+s.height:"popup=yes,width=960,height=540";
+  aire=window.open("","aire",f);
+  if(!aire){$("msg").textContent="El navegador bloqueó la ventana. Permití las ventanas emergentes y tocá de nuevo el botón.";return}
+  if(s){try{aire.moveTo(s.left,s.top);aire.resizeTo(s.width,s.height)}catch(e){}}
+  airScreen=s;buildAir(aire);
+  try{aire.document.documentElement.requestFullscreen(s?{screen:s}:undefined).catch(()=>{})}catch(e){}
+  $("air").classList.add("on");$("air").textContent="Aire conectado";
+  if(tip)$("msg").textContent=tip;
+  const t=setInterval(()=>{if(!airOpen()){
+    $("air").classList.remove("on");$("air").textContent="Pantalla de aire";black=false;nowShow(null,"none");clearInterval(t)}},800)}
+
+/* ---------- atajos ---------- */
+function onKey(e){
+  if(e.target&&e.target.tagName==="INPUT"){if(e.key==="Escape")e.target.blur();return}
+  const k=e.key;
+  if(k==="Enter"&&e.target.ownerDocument!==document){
+    const a=document.activeElement;if(a&&a.classList&&a.classList.contains("th"))a.click();return}
+  if(k==="/"){e.preventDefault();window.focus();$("q").focus();$("q").select();return}
+  if(k==="b"||k==="B"){toggleBlack();return}
+  if(e.shiftKey&&/^Digit[1-9]$/.test(e.code)){const it=tray[+e.code.slice(5)-1];if(it)pick(it);return}
+  if(/^[1-9]$/.test(k)&&!e.ctrlKey&&!e.altKey){const c=$("grid").children[+k-1];if(c)c.click();return}
+  if(k==="s"||k==="S"){
+    const a=document.activeElement,c=(a&&a.closest&&a.closest(".th"))||document.querySelector(".th.sel");
+    if(c)c.querySelector(".st").click();return}
+  if(k.startsWith("Arrow")){
+    const cs=[...$("grid").children];if(!cs.length)return;e.preventDefault();
+    const a=document.activeElement,i0=cs.indexOf(a&&a.closest?a.closest(".th"):null);
+    const cols=getComputedStyle($("grid")).gridTemplateColumns.split(" ").length;
+    const d={ArrowRight:1,ArrowLeft:-1,ArrowDown:cols,ArrowUp:-cols}[k];
+    const n=i0<0?0:Math.max(0,Math.min(cs.length-1,i0+d));
+    cs[n].focus();cs[n].scrollIntoView({block:"nearest"})}}
+document.addEventListener("keydown",onKey);
+renderHist();renderTray();
+if("serviceWorker" in navigator&&location.protocol.indexOf("http")===0)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
